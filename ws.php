@@ -586,6 +586,23 @@ function ws_addDefaultMethods( $arr )
     );
 
   $service->addMethod(
+      'pwg.images.getOrphans',
+      'ws_images_getOrphans',
+      array(
+        'per_page' =>   array('default'=>100,
+                              'maxValue'=>$conf['ws_max_images_per_page'],
+                              'type'=>WS_TYPE_INT|WS_TYPE_POSITIVE),
+        'page' =>       array('default'=>0,
+                              'type'=>WS_TYPE_INT|WS_TYPE_POSITIVE),
+        'order' =>      array('default'=>null,
+                              'info'=>'id, file, name, hit, rating_score, date_creation, date_available, random'),
+        ),
+      'Returns the photos that are not linked to any album (the Batch Manager "No album" set).',
+      $ws_functions_root . 'pwg.images.php',
+      array('admin_only'=>true)
+    );
+
+  $service->addMethod(
       'pwg.images.deleteOrphans',
       'ws_images_deleteOrphans',
       array(

@@ -3002,6 +3002,98 @@ function ws_images_deleteOrphans($params, $service)
 
 /**
  * API method
+ * Returns the list of photos that are not linked to any album.
+ *
+ * The admin Batch Manager already exposes this set ("No album" filter), and
+ * pwg.images.deleteOrphans can delete it, but until now there was no way to
+ * *read* it over the web API. Listing is the safer half of that pair: it lets
+ * a client review what would be removed, or re-file the photos instead.
+ *
+ * Reuses get_orphans() so the definition of "orphan" stays in one place —
+ * notably it keeps excluding photos still sitting in the lounge.
+ *
+ * @since 16
+ * @param mixed[] $params
+ *    @option int per_page
+ *    @option int page
+ *    @option string order
+ */
+function ws_images_getOrphans($params, $service)
+{
+  include_once(PHPWG_ROOT_PATH.'admin/include/functions.php');
+
+  $orphan_ids = get_orphans();
+  $total_images = count($orphan_ids);
+
+  $images = array();
+
+  if ($total_images > 0)
+  {
+    $page_ids = array_slice(
+      $orphan_ids,
+      $params['per_page'] * $params['page'],
+      $params['per_page']
+      );
+
+    if (count($page_ids) > 0)
+    {
+      $order_by = ws_std_image_sql_order($params, 'i.');
+      $order_by = empty($order_by) ? ' ORDER BY i.id ASC' : ' ORDER BY '.$order_by;
+
+      $query = '
+SELECT
+    i.*
+  FROM '.IMAGES_TABLE.' AS i
+  WHERE i.id IN ('.implode(',', $page_ids).')
+  '.$order_by.'
+;';
+      $result = pwg_query($query);
+
+      while ($row = pwg_db_fetch_assoc($result))
+      {
+        $image = array();
+
+        foreach (array('id', 'width', 'height', 'hit') as $k)
+        {
+          if (isset($row[$k]))
+          {
+            $image[$k] = (int)$row[$k];
+          }
+        }
+
+        foreach (array('file', 'name', 'comment', 'date_creation', 'date_available') as $k)
+        {
+          $image[$k] = $row[$k];
+        }
+
+        $image['name'] = strip_tags(trigger_change('render_element_name', $image['name'], __FUNCTION__) ?? '');
+        $image['comment'] = trigger_change('render_element_description', $image['comment'], __FUNCTION__);
+
+        $image = array_merge($image, ws_std_get_urls($row));
+
+        $images[] = $image;
+      }
+    }
+  }
+
+  return array(
+    'paging' => new PwgNamedStruct(
+      array(
+        'page' => $params['page'],
+        'per_page' => $params['per_page'],
+        'count' => count($images),
+        'total_count' => $total_images
+        )
+      ),
+    'images' => new PwgNamedArray(
+      $images, 'image',
+      ws_std_get_image_xml_attributes()
+      )
+    );
+}
+
+/**
+ * API method
  * Associate/Dissociate/Move photos with an album.
  * 
  * @since 14
